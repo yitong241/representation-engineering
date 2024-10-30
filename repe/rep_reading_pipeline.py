@@ -22,10 +22,9 @@ class RepReadingPipeline(Pipeline):
         hidden_states_layers = {}
         for layer in hidden_layers:
             hidden_states = outputs['hidden_states'][layer]
-            hidden_states =  hidden_states[:, rep_token, :].detach()
-            if hidden_states.dtype == torch.bfloat16:
-                hidden_states = hidden_states.float()
-            hidden_states_layers[layer] = hidden_states.detach()
+            hidden_states =  hidden_states[:, rep_token, :]
+            # hidden_states_layers[layer] = hidden_states.cpu().to(dtype=torch.float32).detach().numpy()
+            hidden_states_layers[layer] = hidden_states.detach().to(torch.float)
 
         return hidden_states_layers
 
@@ -66,7 +65,7 @@ class RepReadingPipeline(Pipeline):
     def postprocess(self, outputs):
         return outputs
 
-    def _forward(self, model_inputs, rep_token, hidden_layers, rep_reader=None, component_index=0, which_hidden_states=None, pad_token_id=None):
+    def _forward(self, model_inputs, rep_token, hidden_layers, rep_reader=None, component_index=0, which_hidden_states=None):
         """
         Args:
         - which_hidden_states (str): Specifies which part of the model (encoder, decoder, or both) to compute the hidden states from. 
@@ -91,6 +90,7 @@ class RepReadingPipeline(Pipeline):
         # Wrapper method to get a dictionary hidden states from a list of strings
         hidden_states_outputs = self(train_inputs, rep_token=rep_token,
             hidden_layers=hidden_layers, batch_size=batch_size, rep_reader=None, which_hidden_states=which_hidden_states, **tokenizer_args)
+        # print(hidden_states_outputs)
         hidden_states = {layer: [] for layer in hidden_layers}
         for hidden_states_batch in hidden_states_outputs:
             for layer in hidden_states_batch:
@@ -128,7 +128,14 @@ class RepReadingPipeline(Pipeline):
         self._validate_params(n_difference, direction_method)
 
         # initialize a DirectionFinder
-        direction_finder = DIRECTION_FINDERS[direction_method](**direction_finder_kwargs)
+        '''
+        DIRECTION_FINDERS = {
+            'pca': PCARepReader,
+            'cluster_mean': ClusterMeanRepReader,
+            'random': RandomRepReader,
+        }
+        '''
+        direction_finder = DIRECTION_FINDERS[direction_method](**direction_finder_kwargs) # pca usually
 
 		# if relevant, get the hidden state data for training set
         hidden_states = None
@@ -138,7 +145,9 @@ class RepReadingPipeline(Pipeline):
             hidden_states = self._batched_string_to_hiddens(train_inputs, rep_token, hidden_layers, batch_size, which_hidden_states, **tokenizer_args)
             
             # get differences between pairs
-            relative_hidden_states = {k: np.copy(v) for k, v in hidden_states.items()}
+            relative_hidden_states = {k: np.copy(v) for k, v in hidden_states.items()} # get a copy
+            # each layer the hs is of shape (1024, 4096)
+
             for layer in hidden_layers:
                 for _ in range(n_difference):
                     relative_hidden_states[layer] = relative_hidden_states[layer][::2] - relative_hidden_states[layer][1::2]
@@ -147,6 +156,7 @@ class RepReadingPipeline(Pipeline):
         direction_finder.directions = direction_finder.get_rep_directions(
             self.model, self.tokenizer, relative_hidden_states, hidden_layers,
             train_choices=train_labels)
+        # print(direction_finder.directions)
         for layer in direction_finder.directions:
             if type(direction_finder.directions[layer]) == np.ndarray:
                 direction_finder.directions[layer] = direction_finder.directions[layer].astype(np.float32)

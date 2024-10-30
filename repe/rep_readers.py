@@ -139,10 +139,10 @@ class PCARepReader(RepReader):
         directions = {}
 
         for layer in hidden_layers:
-            H_train = hidden_states[layer]
+            H_train = hidden_states[layer] # hidden states are the relative_hidden_states
             H_train_mean = H_train.mean(axis=0, keepdims=True)
             self.H_train_means[layer] = H_train_mean
-            H_train = recenter(H_train, mean=H_train_mean).cpu()
+            H_train = recenter(H_train, mean=H_train_mean).cpu() # recentering is essential for PCA
             H_train = np.vstack(H_train)
             pca_model = PCA(n_components=self.n_components, whiten=False).fit(H_train)
 
@@ -152,9 +152,7 @@ class PCARepReader(RepReader):
         return directions
 
     def get_signs(self, hidden_states, train_labels, hidden_layers):
-
         signs = {}
-
         for layer in hidden_layers:
             assert hidden_states[layer].shape[0] == len(np.concatenate(train_labels)), f"Shape mismatch between hidden states ({hidden_states[layer].shape[0]}) and labels ({len(np.concatenate(train_labels))})"
             layer_hidden_states = hidden_states[layer]
@@ -163,14 +161,27 @@ class PCARepReader(RepReader):
             layer_hidden_states = recenter(layer_hidden_states, mean=self.H_train_means[layer])
 
             # get the signs for each component
-            layer_signs = np.zeros(self.n_components)
-            for component_index in range(self.n_components):
+            layer_signs = np.zeros(self.n_components) # set all to 0 first
+            # print(self.n_components)
+            for component_index in range(self.n_components): # usually just 1
 
+                # project to 1 direction
+                # torch.Size([1024])
                 transformed_hidden_states = project_onto_direction(layer_hidden_states, self.directions[layer][component_index]).cpu()
+
+                # pca_outputs_comp: 512 * 2
+                # pca_outputs_comp = []
+                # for i in range(train_labels):
+                #     a = transformed_hidden_states
+                #     b = sum(len(c) for c in train_labels[:i])
+                #     c = sum(len(c) for c in train_labels[:i+1])
+                #     d = list(islice(a, b, c))
+                #     pca_outputs_comp.append(d)
                 
                 pca_outputs_comp = [list(islice(transformed_hidden_states, sum(len(c) for c in train_labels[:i]), sum(len(c) for c in train_labels[:i+1]))) for i in range(len(train_labels))]
-
+                print(pca_outputs_comp)
                 # We do elements instead of argmin/max because sometimes we pad random choices in training
+                # whether the label with a value of 1 coincides with the minimum or maximum value in each batch/group
                 pca_outputs_min = np.mean([o[train_labels[i].index(1)] == min(o) for i, o in enumerate(pca_outputs_comp)])
                 pca_outputs_max = np.mean([o[train_labels[i].index(1)] == max(o) for i, o in enumerate(pca_outputs_comp)])
 

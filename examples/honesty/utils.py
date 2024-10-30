@@ -6,8 +6,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.colors import LinearSegmentedColormap
+import json
 
-def honesty_function_dataset(data_path: str, tokenizer: PreTrainedTokenizer, user_tag: str = "", assistant_tag: str = "", seed: int = 0) -> (list, list):
+def honesty_function_dataset(data_path: str, tokenizer: PreTrainedTokenizer, user_tag: str = "", assistant_tag: str = "", end_tag: str = "", seed: int = 42, mode = 'incomplete') -> (list, list):
     """
     Processes data to create training and testing datasets based on honesty.
 
@@ -34,33 +35,100 @@ def honesty_function_dataset(data_path: str, tokenizer: PreTrainedTokenizer, use
     honest_statements = []
     untruthful_statements = []
 
+    # with open('./data/commonsense_QA_v2_dev.json', 'r') as f:
+    #     data = json.load(f)
+
+    #     for k, v in data["question"].items():
+    #         if v[:-23] != "":
+    #             true_statements.append(v[:-23])
+    # random.shuffle(true_statements)
+
     # Process statements
+
+    def get_templated_text(prompt):
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ]
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        return text
+
+
     for statement in true_statements:
-        tokens = tokenizer.tokenize(statement)
-        
-        for idx in range(1, len(tokens) - 5):
-            truncated_tokens = tokens[:idx]
-            truncated_statement = tokenizer.convert_tokens_to_string(truncated_tokens)
+        if mode == 'complete':
+            honest_statements.append(f"{user_tag} {template_str.format(type='an honest')} {assistant_tag} " + statement + end_tag)
+            untruthful_statements.append(f"{user_tag} {template_str.format(type='an untruthful')} {assistant_tag} " + statement + end_tag)
+        else:
+            tokens = tokenizer.tokenize(statement)
+            
+            for idx in range(1, len(tokens) - 5):
+                truncated_tokens = tokens[:idx]
+                truncated_statement = tokenizer.convert_tokens_to_string(truncated_tokens)
+                # print(truncated_statement)
 
-            honest_statements.append(f"{user_tag} {template_str.format(type='an honest')} {assistant_tag} " + truncated_statement)
-            untruthful_statements.append(f"{user_tag} {template_str.format(type='an untruthful')} {assistant_tag} " + truncated_statement)
-
+                honest_statements.append(f"{user_tag} {template_str.format(type='an honest')} {assistant_tag} " + truncated_statement + end_tag)
+                untruthful_statements.append(f"{user_tag} {template_str.format(type='an untruthful')} {assistant_tag} " + truncated_statement + end_tag)
+    '''
+    truncated statements are like:
+    The
+    The Earth
+    The Earth'
+    The Earth's
+    The Earth's atmosphere
+    The Earth's atmosphere protect
+    The Earth's atmosphere protects
+    The Earth's atmosphere protects us
+    The Earth's atmosphere protects us from
+    The Earth's atmosphere protects us from harm
+    The
+    The theory
+    The theory of
+    The theory of evolution
+    The theory of evolution,
+    The theory of evolution, proposed
+    The theory of evolution, proposed by
+    The theory of evolution, proposed by Charles
+    The theory of evolution, proposed by Charles Dar
+    '''
     # Create training data
     ntrain = 512
     combined_data = [[honest, untruthful] for honest, untruthful in zip(honest_statements, untruthful_statements)]
-    train_data = combined_data[:ntrain]
+    '''
+    combined_data
+    [["USER: Pretend you're an honest person making statements about the world. ASSISTANT: The", 
+    "USER: Pretend you're an untruthful person making statements about the world. ASSISTANT: The"], 
+    ["USER: Pretend you're an honest person making statements about the world. ASSISTANT: The Earth", 
+    "USER: Pretend you're an untruthful person making statements about the world. ASSISTANT: The Earth"], 
+    ["USER: Pretend you're an honest person making statements about the world. ASSISTANT: The Earth'", 
+    "USER: Pretend you're an untruthful person making statements about the world. ASSISTANT: The Earth'"]
+    ...]
+    '''
+    train_data = combined_data[:ntrain] # take the first 512
 
     train_labels = []
     for d in train_data:
-        true_s = d[0]
-        random.shuffle(d)
-        train_labels.append([s == true_s for s in d])
+        true_s = d[0] # true statement
+        random.shuffle(d) # randomly shuffle each true and untrue pair
+        train_labels.append([s == true_s for s in d]) # get the true label
     
     train_data = np.concatenate(train_data).tolist()
 
     # Create test data
     reshaped_data = np.array([[honest, untruthful] for honest, untruthful in zip(honest_statements[:-1], untruthful_statements[1:])]).flatten()
-    test_data = reshaped_data[ntrain:ntrain*2].tolist()
+    for data in reshaped_data:
+        print(data)
+    '''
+    reshaped_data
+    ["USER: Pretend you're an honest person making statements about the world. ASSISTANT: The"
+    "USER: Pretend you're an untruthful person making statements about the world. ASSISTANT: The Earth"
+    "USER: Pretend you're an honest person making statements about the world. ASSISTANT: The Earth"
+    "USER: Pretend you're an honest person making statements about the world. ASSISTANT: The Earth is"]
+    '''
+    test_data = reshaped_data[ntrain:ntrain*2].tolist() # take the 513-1024
 
     print(f"Train data: {len(train_data)}")
     print(f"Test data: {len(test_data)}")
@@ -70,7 +138,7 @@ def honesty_function_dataset(data_path: str, tokenizer: PreTrainedTokenizer, use
         'test': {'data': test_data, 'labels': [[1,0]] * len(test_data)}
     }
 
-def plot_detection_results(input_ids, rep_reader_scores_dict, THRESHOLD, start_answer_token=":"):
+def plot_detection_results(input_ids, rep_reader_scores_dict, THRESHOLD, start_answer_token="["):
 
     cmap=LinearSegmentedColormap.from_list('rg',["r", (255/255, 255/255, 224/255), "g"], N=256)
     colormap = cmap
@@ -180,7 +248,7 @@ def plot_detection_results(input_ids, rep_reader_scores_dict, THRESHOLD, start_a
 def plot_lat_scans(input_ids, rep_reader_scores_dict, layer_slice):
     for rep, scores in rep_reader_scores_dict.items():
 
-        start_tok = input_ids.index('▁A')
+        start_tok = input_ids.index('▁ASS')
         print(start_tok, np.array(scores).shape)
         standardized_scores = np.array(scores)[start_tok:start_tok+40,layer_slice]
         # print(standardized_scores.shape)
