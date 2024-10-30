@@ -1,0 +1,44 @@
+qwen-2-7b:
+  path: ../../../models/Qwen2-7B
+  hf_id: Qwen/Qwen2-7B
+  user_tag: "SYSTEM:"
+  assistant_tag: "ASSISTANT:"
+  end_tag: ""
+  phrase: ['ĠASS', 'IST', 'ANT', ':']
+  threshold: 0.8
+
+# llama-2-7b:
+#   path: ../../../models/Llama-2-7b-hf
+#   hf_id: meta-llama/Llama-2-7b-hf
+#   user_tag: "[INST]"
+#   assistant_tag: "[/INST]"
+#   end_tag: ""
+#   phrase: ['▁[', '/', 'INST', ']']
+#   threshold: 0.95
+
+llama-2-7b-chat:
+  path: ../../../models/Llama-2-7b-chat-hf
+  hf_id: meta-llama/Llama-2-7b-chat-hf
+  user_tag: "USER:"
+  assistant_tag: "ASSISTANT:"
+  end_tag: ""
+  phrase: ['▁A', 'SS', 'IST', 'ANT', ':']
+  threshold: 0.95
+
+mistral-7b-instruct-v0.1:
+  path: ../../../models/Mistral-7B-Instruct-v0.1
+  hf_id: mistralai/Mistral-7B-Instruct-v0.1
+  user_tag: "[INST]"
+  assistant_tag: "[/INST]"
+  end_tag: ""
+  phrase: ['▁[', '/', 'INST', ']', '▁']
+  threshold: 0.9
+
+wizard-vicuna-7b-uncensored:
+  path: ../../../models/Wizard-Vicuna-7B-Uncensored
+  hf_id: cognitivecomputations/Wizard-Vicuna-7B-Uncensored
+  user_tag: "USER:"
+  assistant_tag: "ASSISTANT:"
+  end_tag: ""
+  phrase: ['▁A', 'SS', 'IST', 'ANT', ':']
+  threshold: 0.92

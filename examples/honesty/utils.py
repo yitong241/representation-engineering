@@ -35,16 +35,6 @@ def honesty_function_dataset(data_path: str, tokenizer: PreTrainedTokenizer, use
     honest_statements = []
     untruthful_statements = []
 
-    # with open('./data/commonsense_QA_v2_dev.json', 'r') as f:
-    #     data = json.load(f)
-
-    #     for k, v in data["question"].items():
-    #         if v[:-23] != "":
-    #             true_statements.append(v[:-23])
-    # random.shuffle(true_statements)
-
-    # Process statements
-
     def get_templated_text(prompt):
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -119,8 +109,8 @@ def honesty_function_dataset(data_path: str, tokenizer: PreTrainedTokenizer, use
 
     # Create test data
     reshaped_data = np.array([[honest, untruthful] for honest, untruthful in zip(honest_statements[:-1], untruthful_statements[1:])]).flatten()
-    for data in reshaped_data:
-        print(data)
+    # for data in reshaped_data:
+    #     print(data)
     '''
     reshaped_data
     ["USER: Pretend you're an honest person making statements about the world. ASSISTANT: The"
@@ -137,6 +127,13 @@ def honesty_function_dataset(data_path: str, tokenizer: PreTrainedTokenizer, use
         'train': {'data': train_data, 'labels': train_labels},
         'test': {'data': test_data, 'labels': [[1,0]] * len(test_data)}
     }
+
+def index_after_sublist(main_list, sublist):
+    sublist_length = len(sublist)
+    for i in range(len(main_list) - sublist_length + 1):
+        if main_list[i:i + sublist_length] == sublist:
+            return i + sublist_length
+    return None
 
 def plot_detection_results(input_ids, rep_reader_scores_dict, THRESHOLD, start_answer_token="["):
 
